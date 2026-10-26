@@ -1,9 +1,9 @@
 /**
  * 验证专注结束的**全局**提醒。
  *
- * 这个功能原来的 bug：番茄归零的检测写在专注页里，只有那个页面挂载时才跑，
- * 所以人在别的页面时到点毫无反应，回到专注页才补响一声。这里要证明的就是
- * 「人在仪表盘/笔记页时，番茄到点也会立刻响，并且持续响到用户确认」。
+ * 原来的 bug：番茄归零的检测写在专注页里，只有那个页面挂载时才跑，所以人在
+ * 别的页面时到点毫无反应，回到专注页才补响一声。这里要证明的就是
+ * 「人在**别的模块**里，番茄到点也立刻通知 + 持续响铃」。
  *
  * 怎么在几秒内模拟一个 25 分钟的番茄：往页面里注入一个可控的时间偏移，
  * 让应用看到的 Date.now() 往后跳 26 分钟。应用所有时间都由时间戳推导，
@@ -50,44 +50,59 @@ await page.addInitScript(() => {
 });
 
 /** 把应用时钟往后推 minutes 分钟。 */
-async function fastForwardMinutes(minutes) {
+async function skewTo(minutes) {
   await page.evaluate((ms) => window.__setClockSkew(ms), minutes * 60 * 1000);
 }
 
+/** 去一个**别的模块**页面（不是仪表盘），最贴近用户说的场景。 */
+async function gotoOtherModule(route) {
+  await page.goto(`${BASE}/#/m/${route}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.module-page', { timeout: 30000 });
+  await page.waitForTimeout(500);
+}
+
+/** 关掉/打开「结束提示音」。 */
+async function setSound(on) {
+  const box = page.locator('.focus-sound input');
+  if ((await box.isChecked()) !== on) {
+    if (on) await box.check(); else await box.uncheck();
+    await page.waitForTimeout(400);
+  }
+}
+
 try {
-  console.log('1. 开始一个番茄，然后离开专注页');
+  console.log('1. 开始一个番茄，然后切到别的模块');
   await page.goto(`${BASE}/#/m/focus`, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForFunction(() => document.body.innerText.includes('已就绪'), undefined, { timeout: 60000 });
   await page.waitForSelector('.focus-clock', { timeout: 30000 });
   await page.waitForTimeout(900);
-
   await page.locator('.focus-actions .primary').click();
   await page.waitForTimeout(1200);
   check('番茄已开始', (await page.locator('.focus-time.is-running').count()) === 1);
 
-  // 关键：切到仪表盘 —— 模拟「人不在专注页」
-  await page.goto(`${BASE}/#/`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.card-grid', { timeout: 30000 });
-  await page.waitForTimeout(800);
-  check('已离开专注页', (await page.locator('.focus-clock').count()) === 0);
+  // 关键：去「笔记」模块 —— 用户说的「在其他模块中」
+  await gotoOtherModule('notes');
+  check('已离开专注页（在笔记模块）', (await page.locator('.focus-clock').count()) === 0);
   check('此时还没有提醒', (await page.locator('.focus-alarm').count()) === 0);
 
-  console.log('2. 人还在仪表盘时，番茄到点');
-  await fastForwardMinutes(26);
-  // 全局轮询是 1 Hz，留两拍
+  console.log('2. 人在笔记模块时，番茄到点');
+  await skewTo(26);
   await page.waitForSelector('.focus-alarm', { timeout: 15000 });
   await page.waitForTimeout(600);
 
   const alarm = await page.locator('.focus-alarm').innerText();
   console.log('  提醒内容 =', alarm.replace(/\n/g, ' | '));
-  check('没有回到专注页也弹出了提醒', true);
+  check('在其他模块里也弹出了提醒', true);
   check('提醒写明专注结束', alarm.includes('专注结束'), alarm.replace(/\n/g, ' '));
   check('提醒告诉用户正在持续响铃', alarm.includes('正在持续响铃'), alarm.replace(/\n/g, ' '));
   check('有「知道了」可以停铃', (await page.locator('.focus-alarm button', { hasText: '知道了' }).count()) === 1);
 
-  // 界面上的「正在持续响铃」不是靠猜的：引擎只有在 AudioContext 真的
-  // resume 成功（state === 'ringing'）时才会这么显示；被自动播放策略挡住时
-  // 是 'blocked'，会换成「开启提醒」按钮。所以这条断言等价于「音频链路已启动」。
+  // 界面上的「正在持续响铃」只有在 AudioContext 真的 resume 成功
+  // （引擎状态 'ringing'）才会出现；被自动播放策略挡住时是 'blocked'，
+  // 会换成「开启提醒」按钮。所以这条断言等价于「音频链路已启动」。
+  const title = await page.title();
+  console.log('  标签页标题 =', title);
+  check('标签页标题也变成提醒（切到别的应用也能看见）', title.includes('专注结束'), title);
 
   await page.screenshot({ path: join(out, 'focus-alarm-global.png'), fullPage: false });
 
@@ -95,26 +110,23 @@ try {
   await page.goto(`${BASE}/#/m/focus`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.focus-clock', { timeout: 30000 });
   await page.waitForTimeout(1000);
-  const clockText = await page.locator('.focus-clock').innerText();
-  console.log('  专注页 =', clockText.replace(/\n/g, ' | ').slice(0, 120));
   check('计时已自动停止（不再显示运行中）', (await page.locator('.focus-time.is-running').count()) === 0);
   check('有「开始」按钮可继续下一个番茄', (await page.locator('.focus-actions .primary').count()) === 1);
 
-  console.log('4. 点「知道了」停铃并收掉提醒');
-  const ack = page.locator('.focus-alarm button', { hasText: '知道了' });
+  console.log('4. 点「知道了」停铃、收掉提醒、标题复原');
   check('提醒在专注页上仍然可见（全局浮层）', (await page.locator('.focus-alarm').count()) === 1);
-  await ack.first().click();
+  await page.locator('.focus-alarm button', { hasText: '知道了' }).first().click();
   await page.waitForTimeout(600);
   check('确认后提醒消失', (await page.locator('.focus-alarm').count()) === 0);
+  const titleAfter = await page.title();
+  check('标题恢复正常', !titleAfter.includes('专注结束'), titleAfter);
 
   console.log('5. 第二个番茄结束仍然会响（不能只响第一次）');
-  await fastForwardMinutes(0);
+  await skewTo(0);
   await page.locator('.focus-actions .primary').click();
   await page.waitForTimeout(1200);
-  await page.goto(`${BASE}/#/`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.card-grid', { timeout: 20000 });
-  await page.waitForTimeout(600);
-  await fastForwardMinutes(26);
+  await gotoOtherModule('weather');
+  await skewTo(26);
   await page.waitForSelector('.focus-alarm', { timeout: 15000 });
   const second = await page.locator('.focus-alarm').innerText();
   check('第二轮番茄结束仍然弹出提醒', second.includes('专注结束'), second.replace(/\n/g, ' '));
@@ -122,26 +134,39 @@ try {
   await page.locator('.focus-alarm button', { hasText: '知道了' }).first().click();
   await page.waitForTimeout(500);
 
-  console.log('6. 关掉「结束提示音」时：仍然提示，但不响');
+  console.log('6. 跑动中关掉「结束提示音」也必须生效');
+  await skewTo(0);
   await page.goto(`${BASE}/#/m/focus`, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('.focus-clock', { timeout: 20000 });
-  await page.waitForTimeout(800);
-  const soundBox = page.locator('.focus-sound input');
-  if (await soundBox.isChecked()) await soundBox.uncheck();
-  await page.waitForTimeout(400);
-  await fastForwardMinutes(0);
+  await page.waitForTimeout(600);
+  await setSound(true);
   await page.locator('.focus-actions .primary').click();
   await page.waitForTimeout(1200);
-  await page.goto(`${BASE}/#/`, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.card-grid', { timeout: 20000 });
-  await page.waitForTimeout(600);
-  await fastForwardMinutes(26);
+  // 番茄已经在跑，此刻再关声音 —— 这曾经是 bug：定时器闭包拿着开始时的旧值
+  await setSound(false);
+  await gotoOtherModule('notes');
+  await skewTo(26);
   await page.waitForSelector('.focus-alarm', { timeout: 15000 });
-  const silent = await page.locator('.focus-alarm').innerText();
-  console.log('  静音时提醒 =', silent.replace(/\n/g, ' | '));
-  check('关掉声音后仍提示「专注结束」', silent.includes('专注结束'), silent.replace(/\n/g, ' '));
-  check('关掉声音后不进入响铃状态', !silent.includes('正在持续响铃'), silent.replace(/\n/g, ' '));
-  check('说明提示音是关闭的', silent.includes('关闭'), silent.replace(/\n/g, ' '));
+  const midMuted = await page.locator('.focus-alarm').innerText();
+  console.log('  跑动中关声音 =', midMuted.replace(/\n/g, ' | '));
+  check('仍然提示专注结束', midMuted.includes('专注结束'), midMuted.replace(/\n/g, ' '));
+  check('跑动中关掉的声音生效：不响铃', !midMuted.includes('正在持续响铃'), midMuted.replace(/\n/g, ' '));
+  await page.locator('.focus-alarm button', { hasText: '关闭' }).first().click();
+  await page.waitForTimeout(400);
+
+  console.log('7. 重新打开声音后又会响铃');
+  await skewTo(0);
+  await page.goto(`${BASE}/#/m/focus`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.focus-clock', { timeout: 20000 });
+  await page.waitForTimeout(600);
+  await setSound(true);
+  await page.locator('.focus-actions .primary').click();
+  await page.waitForTimeout(1200);
+  await gotoOtherModule('notes');
+  await skewTo(26);
+  await page.waitForSelector('.focus-alarm', { timeout: 15000 });
+  const back = await page.locator('.focus-alarm').innerText();
+  check('重新打开声音后又会响铃', back.includes('正在持续响铃'), back.replace(/\n/g, ' '));
 
   await page.screenshot({ path: join(out, 'focus-alarm-muted.png'), fullPage: false });
 } finally {

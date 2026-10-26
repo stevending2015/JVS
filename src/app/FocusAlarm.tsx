@@ -50,6 +50,18 @@ export function FocusAlarm(): React.ReactElement | null {
 
   React.useEffect(() => subscribeRing((next) => setState(next)), []);
 
+  /**
+   * 声音开关的最新值。
+   *
+   * 下面那个每秒检查的 effect 只依赖 `focusSession`，如果直接读 `focusSoundOn`，
+   * 闭包里拿到的是**开始番茄那一刻**的旧值 —— 用户中途把「结束提示音」关掉，
+   * 到点照样会响（反过来也一样）。所以用 ref 持有最新值，定时器里读 ref。
+   */
+  const soundOnRef = React.useRef(focusSoundOn);
+  React.useEffect(() => {
+    soundOnRef.current = focusSoundOn;
+  }, [focusSoundOn]);
+
   // 自动播放策略兜底：被挡住时，用户第一次点/按键就把铃补上。
   React.useEffect(() => {
     if (state !== 'blocked') return undefined;
@@ -63,34 +75,58 @@ export function FocusAlarm(): React.ReactElement | null {
   }, [focusSession, finished]);
 
   /**
-   * 每秒检查一次「番茄是不是已经到点了」。
+   * 响铃时把标签页标题也改掉。
+   *
+   * 用户切到别的标签页/别的应用时看不到这张卡片，但标签栏上的标题还看得见。
+   * 这是最轻量的「通知」，不需要 Notification 权限。
+   */
+  React.useEffect(() => {
+    if (state !== 'ringing') return undefined;
+    const original = document.title;
+    document.title = `⏱ ${ALARM_TITLE} · JVS`;
+    return () => {
+      document.title = original;
+    };
+  }, [state]);
+
+  /**
+   * 检查「番茄是不是已经到点了」。
    *
    * 只看 pomodoro：正计时没有终点，不该响。
-   * 用时间戳推导而不是依赖 interval 的准确度 —— 标签页被节流、电脑休眠后
-   * 回来，下一次 tick 会立刻算出早已超时，仍然会正确触发。
+   *
+   * 两条保险同时上：
+   *  1. 一个**精确到结束时刻**的 setTimeout —— 后台标签页里 setInterval 会被
+   *     节流到一分钟一次，光靠轮询可能晚响一分钟；
+   *  2. 一个 1 Hz 轮询 —— 应付系统休眠、时钟跳变等 setTimeout 也不准的情况，
+   *     恢复时下一次 tick 会立刻算出早已超时。
+   * 两者都由 handledRef 去重，不会重复落库或重复起铃。
    */
   React.useEffect(() => {
     if (focusSession === null || focusSession.mode !== 'pomodoro') return undefined;
 
     const session = focusSession;
-    const isDue = (): boolean => {
-      const started = new Date(session.start_time).getTime();
-      const elapsed = Math.max(0, (Date.now() - started) / 1000);
-      return elapsed >= session.planned_seconds;
+    const startedAt = new Date(session.start_time).getTime();
+    const dueAt = startedAt + session.planned_seconds * 1000;
+    const isDue = (): boolean => Date.now() >= dueAt;
+
+    const check = (): void => {
+      if (handledRef.current === session.id) return;
+      if (!isDue()) return;
+      void handleFinished(session);
     };
 
-    // 挂载时就已经超时（比如刷新页面回来）：立刻处理，不用等下一个 tick。
-    if (isDue() && handledRef.current !== session.id) {
-      void handleFinished(session);
+    // 挂载时就已经超时（刷新页面回来、或从后台恢复）：立刻处理。
+    if (isDue()) {
+      check();
       return undefined;
     }
 
-    const timer = window.setInterval(() => {
-      if (handledRef.current === session.id) return;
-      if (isDue()) void handleFinished(session);
-    }, 1000);
-
-    return () => window.clearInterval(timer);
+    const exact = window.setTimeout(check, Math.max(0, dueAt - Date.now()) + 50);
+    const poll = window.setInterval(check, 1000);
+    return () => {
+      window.clearTimeout(exact);
+      window.clearInterval(poll);
+    };
     // handleFinished 只依赖 ref 与 props，故意不进依赖表。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusSession]);
@@ -109,8 +145,8 @@ export function FocusAlarm(): React.ReactElement | null {
     const minutes = Math.max(1, Math.round(session.planned_seconds / 60));
     setFinished({ id: session.id, minutes });
 
-    // 用户把「结束提示音」关了就不出声；但仍然显示卡片告诉他已经结束了。
-    if (focusSoundOn) {
+    // 读 ref 而不是 props：定时器里的闭包可能是几分钟前的，用户中途改了开关。
+    if (soundOnRef.current) {
       // bypassMute：引擎的总开关属于倒计时，专注不跟着它一起哑。
       await startRing([ALARM_TITLE], false, `focus:${session.id}`, true);
     }
