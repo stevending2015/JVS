@@ -1,0 +1,300 @@
+{
+  "source": "word-atlas",
+  "license": "CC BY 4.0",
+  "attribution": "词条、例句与插画来自 word-atlas（https://github.com/designfuchen/word-atlas）",
+  "count": 7298,
+  "shards": [
+    {
+      "file": "entry-0.json",
+      "count": 100
+    },
+    {
+      "file": "entry-1.json",
+      "count": 100
+    },
+    {
+      "file": "entry-2.json",
+      "count": 100
+    },
+    {
+      "file": "entry-3.json",
+      "count": 100
+    },
+    {
+      "file": "entry-4.json",
+      "count": 100
+    },
+    {
+      "file": "entry-5.json",
+      "count": 100
+    },
+    {
+      "file": "entry-6.json",
+      "count": 100
+    },
+    {
+      "file": "entry-7.json",
+      "count": 100
+    },
+    {
+      "file": "entry-8.json",
+      "count": 100
+    },
+    {
+      "file": "entry-9.json",
+      "count": 100
+    },
+    {
+      "file": "entry-10.json",
+      "count": 100
+    },
+    {
+      "file": "entry-11.json",
+      "count": 100
+    },
+    {
+      "file": "entry-12.json",
+      "count": 100
+    },
+    {
+      "file": "entry-13.json",
+      "count": 100
+    },
+    {
+      "file": "entry-14.json",
+      "count": 100
+    },
+    {
+      "file": "entry-15.json",
+      "count": 100
+    },
+    {
+      "file": "entry-16.json",
+      "count": 100
+    },
+    {
+      "file": "entry-17.json",
+      "count": 100
+    },
+    {
+      "file": "entry-18.json",
+      "count": 100
+    },
+    {
+      "file": "entry-19.json",
+      "count": 100
+    },
+    {
+      "file": "entry-20.json",
+      "count": 100
+    },
+    {
+      "file": "entry-21.json",
+      "count": 100
+    },
+    {
+      "file": "entry-22.json",
+      "count": 100
+    },
+    {
+      "file": "entry-23.json",
+      "count": 100
+    },
+    {
+      "file": "entry-24.json",
+      "count": 100
+    },
+    {
+      "file": "entry-25.json",
+      "count": 100
+    },
+    {
+      "file": "entry-26.json",
+      "count": 100
+    },
+    {
+      "file": "entry-27.json",
+      "count": 100
+    },
+    {
+      "file": "entry-28.json",
+      "count": 100
+    },
+    {
+      "file": "entry-29.json",
+      "count": 100
+    },
+    {
+      "file": "entry-30.json",
+      "count": 100
+    },
+    {
+      "file": "entry-31.json",
+      "count": 100
+    },
+    {
+      "file": "entry-32.json",
+      "count": 100
+    },
+    {
+      "file": "entry-33.json",
+      "count": 100
+    },
+    {
+      "file": "entry-34.json",
+      "count": 100
+    },
+    {
+      "file": "entry-35.json",
+      "count": 100
+    },
+    {
+      "file": "entry-36.json",
+      "count": 100
+    },
+    {
+      "file": "entry-37.json",
+      "count": 100
+    },
+    {
+      "file": "entry-38.json",
+      "count": 100
+    },
+    {
+      "file": "entry-39.json",
+      "count": 100
+    },
+    {
+      "file": "entry-40.json",
+      "count": 100
+    },
+    {
+      "file": "entry-41.json",
+      "count": 100
+    },
+    {
+      "file": "entry-42.json",
+      "count": 100
+    },
+    {
+      "file": "entry-43.json",
+      "count": 100
+    },
+    {
+      "file": "entry-44.json",
+      "count": 100
+    },
+    {
+      "file": "entry-45.json",
+      "count": 100
+    },
+    {
+      "file": "entry-46.json",
+      "count": 100
+    },
+    {
+      "file": "entry-47.json",
+      "count": 100
+    },
+    {
+      "file": "entry-48.json",
+      "count": 100
+    },
+    {
+      "file": "entry-49.json",
+      "count": 100
+    },
+    {
+      "file": "entry-50.json",
+      "count": 100
+    },
+    {
+      "file": "entry-51.json",
+      "count": 100
+    },
+    {
+      "file": "entry-52.json",
+      "count": 100
+    },
+    {
+      "file": "entry-53.json",
+      "count": 100
+    },
+    {
+      "file": "entry-54.json",
+      "count": 100
+    },
+    {
+      "file": "entry-55.json",
+      "count": 100
+    },
+    {
+      "file": "entry-56.json",
+      "count": 100
+    },
+    {
+      "file": "entry-57.json",
+      "count": 100
+    },
+    {
+      "file": "entry-58.json",
+      "count": 100
+    },
+    {
+      "file": "entry-59.json",
+      "count": 100
+    },
+    {
+      "file": "entry-60.json",
+      "count": 100
+    },
+    {
+      "file": "entry-61.json",
+      "count": 100
+    },
+    {
+      "file": "entry-62.json",
+      "count": 100
+    },
+    {
+      "file": "entry-63.json",
+      "count": 100
+    },
+    {
+      "file": "entry-64.json",
+      "count": 100
+    },
+    {
+      "file": "entry-65.json",
+      "count": 100
+    },
+    {
+      "file": "entry-66.json",
+      "count": 100
+    },
+    {
+      "file": "entry-67.json",
+      "count": 100
+    },
+    {
+      "file": "entry-68.json",
+      "count": 100
+    },
+    {
+      "file": "entry-69.json",
+      "count": 100
+    },
+    {
+      "file": "entry-70.json",
+      "count": 100
+    },
+    {
+      "file": "entry-71.json",
+      "count": 100
+    },
+    {
+      "file": "entry-72.json",
+      "count": 98
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+node_modules/
+dist/
+*.local
+.verify/
+
+# esbuild 生成的测试中间产物（由 verify:* 脚本重新生成）
+scripts/.*-for-test.cjs
+
+# 本地词库资源（不进仓库，用导入脚本生成）
+.assets/
+
+# 私人数据、备份、导出和本地配置
+.env
+.env.*
+!.env.example
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.jvsbackup
+*.ged
+*.gedcom
+*.pem
+*.key
+backups/
+exports/
+private/

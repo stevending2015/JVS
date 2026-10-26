@@ -1,0 +1,10 @@
+{
+  "name": "JVS - 个人生活助手",
+  "short_name": "JVS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "description": "天气、万年历、生日卡、倒计时、笔记与家族树于一体",
+  "icons": []
+}

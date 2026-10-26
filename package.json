@@ -1,0 +1,52 @@
+{
+  "name": "jvs",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "JVS - 一体化个人生活应用骨架：仪表盘 + 可扩展功能模块 + 浏览器 SQLite",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify": "node scripts/verify-browser.mjs",
+    "verify:tabs": "node scripts/verify-tabs.mjs",
+    "verify:family": "node scripts/verify-family.mjs",
+    "verify:migration": "npx esbuild src/core/db/schema.ts --format=cjs --outfile=scripts/.schema-for-test.cjs --log-level=error && node scripts/verify-migration.mjs",
+    "verify:moon": "npx esbuild src/core/weather/moon.ts --bundle --format=cjs --outfile=scripts/.moon-for-test.cjs --log-level=error && npx esbuild src/core/weather/celestial.ts --bundle --format=cjs --outfile=scripts/.celestial-for-test.cjs --log-level=error && node scripts/verify-moon.mjs",
+    "verify:purge": "npx esbuild src/core/db/schema.ts --format=cjs --outfile=scripts/.schema-for-test.cjs --log-level=error && npx esbuild src/core/person/purge.ts --format=cjs --outfile=scripts/.purge-for-test.cjs --log-level=error && node scripts/verify-purge.mjs",
+    "verify:markdown": "npx esbuild src/core/note/markdown.ts --bundle --format=cjs --outfile=scripts/.md-for-test.cjs --external:katex --log-level=error && node scripts/verify-markdown.mjs",
+    "verify:notes": "node scripts/verify-notes.mjs",
+    "verify:weather": "npx esbuild src/core/weather/openMeteo.ts --bundle --format=cjs --outfile=scripts/.weather-for-test.cjs --log-level=error && node scripts/verify-weather.mjs",
+    "verify:focus": "node scripts/verify-focus.mjs",
+    "verify:goal": "npx esbuild src/core/goal/logic.ts --bundle --format=cjs --outfile=scripts/.goal-logic-for-test.cjs --log-level=error && npx esbuild src/core/goal/noteFormat.ts --bundle --format=cjs --outfile=scripts/.goal-noteformat-for-test.cjs --log-level=error && node scripts/verify-goal.mjs",
+    "verify:pinned": "npx esbuild src/core/weather/pinnedFormat.ts --bundle --format=cjs --outfile=scripts/.pinned-for-test.cjs --log-level=error && node scripts/verify-pinned.mjs",
+    "build:word": "node scripts/build-word-data.mjs",
+    "verify:atlas": "npx esbuild src/core/word/extract.ts --bundle --format=cjs --outfile=scripts/.word-extract-for-test.cjs --log-level=error && npx esbuild src/core/word/session.ts --bundle --format=cjs --outfile=scripts/.word-session-for-test.cjs --log-level=error && npx esbuild src/core/word/srs.ts --bundle --format=cjs --outfile=scripts/.word-srs-for-test.cjs --log-level=error && node scripts/verify-atlas.mjs",
+    "deploy:media": "node scripts/deploy-media-server.mjs",
+    "verify:media-server": "node scripts/verify-media-server.mjs",
+    "verify:remote-media": "node scripts/verify-remote-media.mjs",
+    "verify:remote-browser": "node scripts/verify-remote-browser.mjs",
+    "verify:print": "node scripts/verify-print.mjs",
+    "verify:ui": "node scripts/verify-ui-polish.mjs",
+    "verify:settings": "node scripts/verify-settings.mjs",
+    "verify:autolock": "node scripts/verify-autolock.mjs"
+  },
+  "dependencies": {
+    "@sqlite.org/sqlite-wasm": "^3.53.4-build2",
+    "katex": "^0.19.0",
+    "lunar": "^2.0.0",
+    "lunar-javascript": "^1.7.7",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "ts-fsrs": "^5.4.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "playwright-core": "^1.64.1",
+    "typescript": "^5.9.0",
+    "vite": "^8.3.4"
+  }
+}
