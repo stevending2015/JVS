@@ -18,7 +18,6 @@ import {
   formatMinutes,
   heatBucket,
   localDayKey,
-  playFocusChime,
   plannedSeconds,
   recentDayKeys,
 } from '../../core/focus/util.js';
@@ -84,8 +83,6 @@ export function FocusPage(): React.ReactElement {
   const [streak, setStreak] = React.useState(0);
   const [todayCount, setTodayCount] = React.useState(0);
   const [tick, setTick] = React.useState(0);
-  /** Guards the auto-stop so the end effect cannot fire twice. */
-  const finishedRef = React.useRef<string | null>(null);
 
   const running = focusSession !== null;
 
@@ -134,19 +131,19 @@ export function FocusPage(): React.ReactElement {
         ? 0
         : Math.min(1, elapsed / focusSession.planned_seconds));
 
-  // 番茄归零：自动落库 + 提示音。
+  /*
+   * 番茄归零的处理**不在这里**。
+   *
+   * 原来这段「落库 + 提示音」写在页面的 effect 里，只有当专注页挂载时才跑 ——
+   * 用户在别的模块时归零毫无反应，等回到这个页面才补响一声。现在它被提到
+   * 全局的 src/app/FocusAlarm.tsx（挂在 App 外壳上），任何页面都会按秒检查，
+   * 到点就自动落库并持续响铃直到用户确认。
+   *
+   * 页面这边只需要在全局状态变化后刷新一次自己的统计数据即可。
+   */
   React.useEffect(() => {
-    if (focusSession === null || focusSession.mode !== 'pomodoro') return;
-    if (remaining > 0 || finishedRef.current === focusSession.id) return;
-    finishedRef.current = focusSession.id;
-    playFocusChime(focusSoundOn);
-    void FocusRepository.stop(focusSession.id, focusSession.planned_seconds)
-      .then(async () => {
-        await refreshFocus();
-        await loadStats();
-      })
-      .catch((e: Error) => setError(e.message));
-  }, [remaining, focusSession, focusSoundOn, refreshFocus, loadStats]);
+    void loadStats();
+  }, [focusSession, loadStats]);
 
   async function start(): Promise<void> {
     if (busy || running) return;
@@ -158,7 +155,6 @@ export function FocusPage(): React.ReactElement {
         mode,
         plannedSeconds: plannedSeconds(modeId),
       });
-      finishedRef.current = null;
       await refreshFocus();
       await loadStats();
     } catch (e) {

@@ -1657,3 +1657,42 @@ button { font: inherit; color: inherit; cursor: pointer; }
    样式由 .mediabase 系列统一提供，这里只补两处旧标记的对齐。 */
 .wa-mediabase .mediabase__input { flex: 1; min-width: 260px; }
 .wa-stats-view .mediabase__hint { margin: 0; }
+
+/* ============================ 专注结束：全局提醒 ============================
+   番茄是在「别的页面」上到点的概率更高（人在看笔记、看天气），所以这张卡片
+   是固定浮层，挂在所有页面之上，而不是长在专注页里。 */
+.focus-alarm {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  top: 66px; z-index: 75;
+  display: flex; align-items: center; gap: 12px;
+  width: min(560px, calc(100vw - 32px));
+  padding: 12px 16px; border-radius: 14px;
+  border: 1px solid rgba(251, 191, 36, .5);
+  background: rgba(38, 29, 12, .96);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .5);
+  animation: focus-alarm-in .22s ease-out;
+}
+/* 正在响铃时描边更亮、并轻微呼吸，和「只是提示一下」区分开 */
+.focus-alarm.is-ringing {
+  border-color: var(--warn);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, .5), 0 0 0 1px rgba(251, 191, 36, .35);
+  animation: focus-alarm-in .22s ease-out, focus-alarm-pulse 1.8s ease-in-out infinite;
+}
+@keyframes focus-alarm-in {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes focus-alarm-pulse {
+  0%, 100% { box-shadow: 0 16px 44px rgba(0,0,0,.5), 0 0 0 1px rgba(251,191,36,.3); }
+  50%      { box-shadow: 0 16px 44px rgba(0,0,0,.5), 0 0 0 3px rgba(251,191,36,.5); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-alarm, .focus-alarm.is-ringing { animation: none; }
+}
+
+.focus-alarm__icon { font-size: 22px; line-height: 1; flex: none; }
+.focus-alarm__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.focus-alarm__text b { font-size: 13.5px; color: var(--text); }
+.focus-alarm__sub { font-size: 12px; line-height: 1.5; color: var(--muted); }
+.focus-alarm__actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.focus-alarm__actions button { padding: 6px 14px; font-size: 12.5px; }

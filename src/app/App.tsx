@@ -27,6 +27,7 @@ import {
 } from '../core/security/password.js';
 import { AmbienceButton } from './AmbienceButton.js';
 import { Dashboard } from './Dashboard.js';
+import { FocusAlarm } from './FocusAlarm.js';
 import { LockOverlay, UnlockDialog } from './LockGate.js';
 import { SettingsPanel } from './SettingsPanel.js';
 
@@ -215,6 +216,12 @@ export function App(): React.ReactElement {
           </button>
         </div>
       </header>
+
+      {/*
+        专注结束的提醒必须挂在全局：番茄归零时用户很可能不在专注页。
+        放在 <main> 外面，任何路由下都在跑（见 FocusAlarm 顶部注释）。
+      */}
+      <FocusAlarm />
 
       {autoLockedNotice && (
         <div className="autolock-notice" role="status">

@@ -29,6 +29,7 @@
     "verify:remote-browser": "node scripts/verify-remote-browser.mjs",
     "verify:print": "node scripts/verify-print.mjs",
     "verify:print-paging": "node scripts/verify-print-paging.mjs",
+    "verify:focus-alarm": "node scripts/verify-focus-alarm.mjs",
     "verify:ui": "node scripts/verify-ui-polish.mjs",
     "verify:settings": "node scripts/verify-settings.mjs",
     "verify:autolock": "node scripts/verify-autolock.mjs",

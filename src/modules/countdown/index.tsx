@@ -217,10 +217,11 @@ export function CountdownPage(): React.ReactElement {
 
   // 页面打开时如果铃被自动播放策略挡住了，挂一个一次性的手势监听：
   // 用户第一次点击/按键就把铃补上（和「开启提醒」按钮是同一个效果）。
+  // armRing 不用再传标题 —— 要显示的到期清单已经由 startRing 记在引擎里了。
   React.useEffect(() => {
     if (!blocked) return undefined;
-    return armRing(due);
-  }, [blocked, due]);
+    return armRing();
+  }, [blocked]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
