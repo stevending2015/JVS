@@ -18,7 +18,10 @@ html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 600px at 20% -10%, #16243c 0%, var(--bg) 60%);
+  /* 纯色底。原来这里是 radial-gradient（左上角一团更亮的蓝），在深色主题下
+     看着像「蒙了一层光晕」，容易让人误以为有未加载完的图层。现在整块用 --bg
+     这一支纯色，靠面板与线条分层，界面更干净、也不吃 GPU。 */
+  background: var(--bg);
   color: var(--text);
   font: 14px/1.55 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -1158,19 +1161,27 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wa-mediabase .wa-search { flex: 1; min-width: 260px; }
 
 /* ============================ 笔记打印 / 导出 PDF ============================
-   屏幕上是「一页白纸」的预览；打印时把应用其余部分藏掉，只留这张纸。
+   屏幕上是**真·分页预览**：一堆按纸张大小切好的独立白纸，页与页之间有缝隙和
+   阴影，还有翻页按钮。打印时把应用其余部分藏掉，只留这些纸。
+
+   为什么要真的切成多张而不是让它自己流动：不切的话屏幕上只有一条无穷长的
+   白条，用户根本不知道打印出来会在哪里断页。
+
    纸自己定义一套浅色变量，所以 .md-body 的全部规则原样复用，不用写第二套。 */
 .print-overlay {
   position: fixed; inset: 0; z-index: 60;
   background: rgba(6, 10, 18, .88);
   display: flex; flex-direction: column; align-items: center;
-  padding: 20px 16px; overflow: auto;
+  padding: 20px 16px 40px; overflow: auto;
+  /* 翻页要平滑滚到目标页，所以这里是滚动容器 */
+  scroll-behavior: smooth;
 }
 .print-toolbar {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-bottom: 14px; padding: 9px 14px; border-radius: 10px;
   background: var(--panel); border: 1px solid var(--line);
   position: sticky; top: 0; z-index: 2;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
 }
 .print-toolbar__hint { font-size: 12px; color: var(--muted); }
 .print-toolbar button {
@@ -1181,7 +1192,35 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .print-toolbar button.primary { background: var(--accent); border-color: var(--accent); color: #08111f; font-weight: 600; }
 .print-toolbar button:disabled { opacity: .5; cursor: not-allowed; }
 
-.print-sheet {
+/* --- 纸张选择 --- */
+.print-toolbar__paper {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--muted);
+}
+.print-toolbar__paper select {
+  padding: 5px 8px; border-radius: 7px; font: inherit; font-size: 12.5px;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+  cursor: pointer;
+}
+.print-toolbar__paper select:hover { border-color: var(--accent); }
+
+/* --- 翻页 --- */
+.print-toolbar__nav { display: inline-flex; align-items: center; gap: 6px; }
+.print-toolbar__nav button { padding: 5px 12px; font-size: 12.5px; }
+.print-toolbar__count {
+  min-width: 92px; text-align: center; font-size: 12.5px;
+  color: var(--text); font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* --- 纸堆 --- */
+.print-pages {
+  display: flex; flex-direction: column; align-items: center; gap: 22px;
+  /* 纸可能比视口宽（A4 @96dpi 是 794px，窄屏放不下），让它自己横向滚 */
+  max-width: 100%;
+}
+
+.print-page {
   /* 纸张自己的配色：打印必须是白底黑字，深色主题只会浪费墨水。 */
   --text: #1b2333;
   --muted: #5b6a80;
@@ -1189,13 +1228,36 @@ button { font: inherit; color: inherit; cursor: pointer; }
   --accent: #1f5fd0;
   --good: #157f5c;
   --bad: #c0392b;
-  width: 210mm; min-height: 297mm;
-  padding: 18mm 16mm;
+  /* 宽高由 JS 按选中的纸别写在内联样式里（mm）。
+     这里不写死 210mm，否则切到 A5 时纸还是 A4 大小。 */
+  box-sizing: border-box;
+  position: relative;
+  flex: none;
   background: #ffffff; color: #1b2333;
   border-radius: 4px;
   box-shadow: 0 18px 50px rgba(0, 0, 0, .45);
   font-size: 10.5pt; line-height: 1.75;
+  /* 一页就是严格一页高。分页算法已经保证内容装得下，这里兜住溢出，
+     免得万一算错时把下一页顶下去、把整个预览搞乱。 */
+  overflow: hidden;
+  scroll-margin-top: 72px;
 }
+
+/*
+ * 页码：放在纸内下方留白里。
+ *
+ * 不能放到纸外面（bottom: -20px 之类）—— `.print-page` 有 overflow: hidden
+ * 兜住溢出，放到外面会被直接裁掉，看不见。下方留白本来就有 18mm，
+ * 塞一行小字不会压到正文。
+ */
+.print-page__no {
+  position: absolute; left: 0; right: 0; bottom: 5mm;
+  text-align: center;
+  font-size: 9pt; color: #93a0b4;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
 .print-sheet__head { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1.5px solid var(--line); }
 .print-sheet__title { margin: 0 0 6px; font-size: 20pt; line-height: 1.3; color: #101827; font-weight: 700; }
 .print-sheet__meta { font-size: 8.5pt; color: var(--muted); }
@@ -1216,31 +1278,73 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .print-sheet__body pre.md-code code { color: #1b2333; }
 .print-sheet__body code { background: #eef1f6; color: #b02a37; }
 .print-sheet__body blockquote { background: #f4f7fc; }
+/* 单张图不能超过一页，否则一张竖图就能把分页顶穿 */
+.print-sheet__body .md-image { max-width: 100%; max-height: 100mm; object-fit: contain; }
+
+/*
+ * 离屏测量容器：不可见、不占位、不吃事件。
+ *
+ * 它必须和真实纸张**同宽同字号**，否则量出来的高度是错的 —— 所以 JS 里
+ * 只覆盖 width（按纸别算），其余全部沿用 .md-body / .print-sheet__body 的规则。
+ * 用 position:absolute + 负偏移而不是 display:none：display:none 的元素
+ * 根本没有布局，量不到高度。
+ */
+.print-measure {
+  position: absolute !important;
+  left: -10000px !important;
+  top: 0 !important;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+.print-measure .md-image { max-width: 100%; max-height: 100mm; object-fit: contain; }
 
 @media print {
-  /* 藏掉应用本身，只留这张纸。visibility 而不是 display：保留布局不抖动。 */
-  body * { visibility: hidden !important; }
-  .print-sheet, .print-sheet * { visibility: visible !important; }
+  /*
+   * 把应用外壳整个从版面里拿掉，只留打印层。
+   *
+   * 这里**必须**用 display:none，不能用 visibility:hidden：
+   * visibility 只是看不见，布局还占着高度，于是打印层被顶到第 2 页之后，
+   * 凭空多出几张空白页（实测 2 页的笔记打出 5 页）。
+   * 打印层已经 portal 到 document.body，所以它是 #root 的兄弟节点，
+   * 这一条规则不会把它自己藏掉。
+   */
+  body > *:not(.print-overlay) { display: none !important; }
+  html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+
   .print-toolbar { display: none !important; }
+
   .print-overlay {
     position: static !important; inset: auto !important;
-    background: none !important; padding: 0 !important; overflow: visible !important;
+    background: none !important; padding: 0 !important;
+    overflow: visible !important; display: block !important;
   }
-  .print-sheet {
-    position: absolute; left: 0; top: 0;
-    width: auto; min-height: 0; margin: 0; padding: 0;
-    box-shadow: none !important; border-radius: 0;
-    background: #fff !important;
+  .print-pages {
+    display: block !important; gap: 0 !important; max-width: none !important;
   }
-  /* 分页控制：这些元素尽量别被劈开。 */
-  .print-sheet h1, .print-sheet h2, .print-sheet h3, .print-sheet h4 {
-    break-after: avoid-page; page-break-after: avoid;
+
+  /*
+   * 每一页自己就是一张纸：宽高由内联样式按纸别给出，`@page { margin: 0 }`
+   * 由组件动态注入。所以浏览器不用再自己算分页 —— 一页一个 `break-after`，
+   * 预览里看到的分页点就是 PDF 里的分页点。
+   */
+  .print-page {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    overflow: hidden;
+    break-inside: avoid; page-break-inside: avoid;
+    break-after: page; page-break-after: always;
   }
-  .print-sheet pre, .print-sheet table, .print-sheet img, .print-sheet blockquote, .print-sheet li {
+  /* 最后一页后面不要再补一张空白页 */
+  .print-page:last-child { break-after: auto; page-break-after: auto; }
+  /* 页码只是屏幕上的提示，纸面上不印 */
+  .print-page__no { display: none !important; }
+
+  /* 兜底：单页内部也别把表格/代码块劈开 */
+  .print-page pre, .print-page table, .print-page img, .print-page blockquote {
     break-inside: avoid; page-break-inside: avoid;
   }
-  .print-sheet .md-image { max-width: 100%; }
-  @page { margin: 16mm 14mm; }
 }
 
 /* ============================ 环境声（右上角） ============================ */
@@ -1451,3 +1555,105 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .autolock-notice { animation: none; }
 }
+
+/* ============================ 倒计时响铃 ============================ */
+/* 到期横幅：响铃时用暖色描边，和普通 banner 区分开。 */
+.banner--ring {
+  display: flex; align-items: center; gap: 12px;
+  border-color: rgba(251, 191, 36, .55); color: var(--warn);
+  background: rgba(251, 191, 36, .1);
+}
+.cd-ring { margin-bottom: 12px; }
+.cd-ring__icon { font-size: 20px; line-height: 1; flex: none; }
+.cd-ring__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cd-ring__text b { color: var(--text); font-size: 13.5px; }
+.cd-ring__sub { color: var(--muted); font-size: 12px; line-height: 1.55; }
+.cd-ring__actions { margin-left: auto; flex: none; }
+
+/* 仪表盘卡片里到期的行 */
+.mini-list__meta.is-due { color: var(--warn); font-weight: 600; }
+.mini-list__note {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  color: var(--warn); font-size: 11.5px; line-height: 1.5;
+  margin-top: 2px; padding-top: 4px; border-top: 1px dashed rgba(251, 191, 36, .3);
+}
+.mini-list__note .link { color: var(--warn); font-size: 11.5px; text-decoration: underline; }
+
+/* 倒计时列表里到期的项 */
+.person-list li.is-due { border-left: 2px solid var(--warn); padding-left: 10px; }
+.person-list__next.is-due { color: var(--warn); font-weight: 600; }
+.cd-due-tag {
+  display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  color: var(--warn); background: rgba(251, 191, 36, .14); border: 1px solid rgba(251, 191, 36, .4);
+}
+
+/* 声音设置区 */
+.cd-sound {
+  margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.cd-sound__title { margin: 0; font-size: 13px; color: var(--text); }
+.cd-sound__toggle {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; color: var(--text); cursor: pointer;
+}
+.cd-sound__volume {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12.5px; color: var(--muted);
+}
+.cd-sound__volume input[type='range'] { flex: 1; max-width: 220px; accent-color: var(--accent); }
+.cd-sound__value { min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+.cd-sound__hint { margin: 0; font-size: 11.5px; line-height: 1.6; color: var(--muted); }
+
+/* ============================ 媒体源设置 ============================ */
+/* 全局设置面板与词光 atlas 统计页共用同一个组件（app/MediaSourceSetting.tsx），
+   所以这里的类名两处通用，不带模块前缀。 */
+.mediabase { display: flex; flex-direction: column; gap: 8px; }
+.mediabase__status { margin: 0; font-size: 12px; line-height: 1.65; color: var(--muted); }
+.mediabase__status b { color: var(--text); }
+.mediabase__row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mediabase__input {
+  flex: 1; min-width: 240px;
+  padding: 9px 14px; border-radius: 10px; font-size: 14px;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+}
+.mediabase__input:focus { outline: none; border-color: var(--accent); }
+.mediabase__input:disabled { opacity: .6; }
+.mediabase__hint { margin: 0; font-size: 12px; line-height: 1.6; }
+.mediabase__hint--ok { color: var(--good); }
+.mediabase__hint--bad { color: var(--bad); }
+
+/* 词光 atlas：列表头的媒体源入口 + 今日页的状态行 */
+.wa-mediaentry {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; padding: 4px 10px; color: var(--muted);
+}
+.wa-mediaentry:hover { border-color: var(--accent); color: var(--accent); }
+.wa-mediastatus { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wa-mediastatus b { color: var(--text); }
+/* 「去配置」沿用 .link 的样式，但这里要能看出是个可点的入口而不是错误提示。 */
+.wa-mediastatus__link {
+  padding: 0; font-size: 12px; color: var(--accent);
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.wa-mediastatus__link:hover { color: var(--text); }
+
+/* 从别处跳过来的高亮：告诉用户「你看到的就是那块设置」。 */
+.wa-mediaanchor { scroll-margin-top: 76px; }
+.wa-mediaanchor.is-flash {
+  animation: wa-mediaanchor-flash 1.2s ease-out;
+  border-radius: 12px;
+}
+@keyframes wa-mediaanchor-flash {
+  from { box-shadow: 0 0 0 0 rgba(88, 166, 255, .55); }
+  to { box-shadow: 0 0 0 10px rgba(88, 166, 255, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wa-mediaanchor.is-flash { animation: none; outline: 1px solid var(--accent); }
+}
+
+/* 词光 atlas 统计页里的媒体源设置：老脚本按 .wa-mediabase 找它，
+   样式由 .mediabase 系列统一提供，这里只补两处旧标记的对齐。 */
+.wa-mediabase .mediabase__input { flex: 1; min-width: 260px; }
+.wa-stats-view .mediabase__hint { margin: 0; }

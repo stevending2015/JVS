@@ -1,12 +1,17 @@
 /**
- * 设置面板：应用锁 + 数据备份/导入。
+ * 设置面板：应用锁 + 数据备份/导入 + 媒体源。
  *
- * 两个标签页分开，因为它们的风险等级完全不同 —— 「安全」是随手能改的开关，
- * 「数据」里有会清空一切的操作，需要额外的确认步骤。
+ * 三个标签页分开，因为它们的性质完全不同 —— 「安全」是随手能改的开关，
+ * 「数据」里有会清空一切的操作，需要额外的确认步骤，「媒体」则只跟词光模块有关。
+ *
+ * 「媒体」单独占一个标签页而不是塞进「数据」：它以前只藏在词光 atlas 的统计页最底下，
+ * 没人找得到；放一个一级标签页，用户在 ⚙ 里一眼就能看见。
  */
 
 import * as React from 'react';
 import { Modal } from './Modal.js';
+import { CountdownRingSetting } from './CountdownRingSetting.js';
+import { MediaSourceSetting } from './MediaSourceSetting.js';
 import { listModules } from '../core/module/registry.js';
 import {
   ALL_MODULES,
@@ -33,7 +38,7 @@ import {
   type BackupInspection,
 } from '../core/backup/backup.js';
 
-type Tab = 'security' | 'data';
+type Tab = 'security' | 'data' | 'media';
 
 /** 设置面板。 */
 export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () => void }): React.ReactElement {
@@ -60,10 +65,50 @@ export function SettingsPanel({ open, onClose }: { open: boolean; onClose: () =>
           >
             💾 数据
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === 'media'}
+            className={tab === 'media' ? 'is-active' : ''}
+            onClick={() => setTab('media')}
+          >
+            🖼 媒体
+          </button>
         </div>
-        {tab === 'security' ? <SecurityTab /> : <DataTab />}
+        {tab === 'security' ? <SecurityTab /> : tab === 'data' ? <DataTab /> : <MediaTab />}
       </div>
     </Modal>
+  );
+}
+
+// ────────────────────────────── 媒体 ──────────────────────────────
+
+/**
+ * 媒体源标签页。
+ *
+ * 复用了共享的 MediaSourceSetting —— 和词光 atlas 统计页里那份是同一个组件，
+ * 两边不会各存一份状态、改了一边另一边不知道。
+ *
+ * 倒计时到期响铃也放在这里：它同样是一种「声音」，而开关和音量原来只做在
+ * 倒计时页最底部，用户几乎找不到。
+ *
+ * @returns 媒体设置界面。
+ */
+function MediaTab(): React.ReactElement {
+  return (
+    <div className="settings__pane">
+      <h4 className="settings__sub">媒体源</h4>
+      <p className="settings__hint">
+        词光 atlas 的插画和音频不进数据库，学习时按需从远端（或本地目录）拉取。
+        这里填媒体服务器的基地址；留空则自动选择，填 <code>local</code> 强制使用本地目录。
+        部署方式见 <code>docs/word-media-deploy.md</code>。
+      </p>
+      <MediaSourceSetting />
+
+      <hr className="settings__rule" />
+
+      <CountdownRingSetting />
+    </div>
   );
 }
 

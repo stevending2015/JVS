@@ -26,7 +26,7 @@ workspace/
       entries/
 ```
 
-JVS 的开发和预览服务会从同级 `word-atlas/public/atlas` 提供 `/word-media`。在「词光 atlas → 统计 → 媒体源」留空或填 `local` 即可，不需要额外指定远端服务器。素材较大，下载后可检查 `img/abandon.webp` 和 `audio/uk/abandon.mp3` 是否存在。
+JVS 的开发和预览服务会从同级 `word-atlas/public/atlas` 提供 `/word-media`。在「⚙ 设置 → 媒体 → 媒体源」留空或填 `local` 即可，不需要额外指定远端服务器（模块内「词光 atlas → 统计 → 媒体源」是同一个设置区，也可以就地改）。素材较大，下载后可检查 `img/abandon.webp` 和 `audio/uk/abandon.mp3` 是否存在。
 
 如资源放在其他位置，可先设置 `JVS_WORD_MEDIA`，例如 PowerShell：
 
@@ -41,7 +41,7 @@ JVS 已带有词条文本，不需要重复生成；需要更新词库时，才�
 
 ## 远端
 
-在「词光 atlas → 统计 → 媒体源」填自己的 HTTPS 媒体地址。留空或 local 默认使用本地 /word-media，不会连接预设私人服务器。
+在「⚙ 设置 → 媒体 → 媒体源」填自己的 HTTPS 媒体地址。留空或 local 默认使用本地 /word-media，不会连接预设私人服务器。
 
 部署生产网站时，`pnpm build` 不会将同级词光素材打包进 `dist`，Vite 本地媒体中间件也不会随静态网站部署。需要把上面下载的 `public/atlas` 素材另行放到静态服务器或 CDN，支持跨域访问，并在应用中填写对应媒体源。普通使用者若已有部署者提供的媒体地址，直接填写即可，无需自行克隆仓库。
 

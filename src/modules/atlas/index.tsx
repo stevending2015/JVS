@@ -8,20 +8,19 @@
  *   统计   —— 累计学习量、掌握度、错词本
  *
  * 媒体只缓存当前这一组（20–30 词，约 2 MB），换组即换缓存 —— 见 core/word/media.ts。
+ *
+ * 媒体源（插画和音频从哪取）以前只藏在统计页最底部，没人找得到。
+ * 现在列表头有常驻入口、今日页有状态行，全局 ⚙ 设置面板里也有同一个设置区。
  */
 
 import * as React from 'react';
-import { getSetting } from '../../core/setting/repository.js';
+import { MediaSourceSetting } from '../../app/MediaSourceSetting.js';
+import { Modal } from '../../app/Modal.js';
 import { useStore } from '../../core/store.js';
 import { ensureWordData } from '../../core/word/import.js';
 import { buildReviewReminder } from '../../core/word/link.js';
 import { wordMedia } from '../../core/word/media.js';
-import {
-  applyMediaSource,
-  isValidMediaBase,
-  probeMediaBase,
-  setMediaBase,
-} from '../../core/word/mediaConfig.js';
+import { applyMediaSource } from '../../core/word/mediaConfig.js';
 import { WordRepository } from '../../core/word/repository.js';
 import {
   buildQuestions,
@@ -100,9 +99,14 @@ export function AtlasPage(): React.ReactElement {
   const [setSizes, setSetSizes] = React.useState<Map<string, number>>(new Map());
   const [reminderBusy, setReminderBusy] = React.useState(false);
   const [reminderAdded, setReminderAdded] = React.useState(false);
-  const [mediaBase, setMediaBaseInput] = React.useState('');
-  const [mediaBusy, setMediaBusy] = React.useState(false);
-  const [mediaHint, setMediaHint] = React.useState<string | null>(null);
+  /** 媒体源状态（源名 + 已缓存条数），只读缓存单例，不自己存一份地址。 */
+  const [mediaStatus, setMediaStatus] = React.useState({ name: wordMedia.sourceName, size: wordMedia.size });
+  /** 媒体源设置区所在的 DOM 锚点，供「媒体源」入口滚动定位。 */
+  const mediaAnchor = React.useRef<HTMLDivElement | null>(null);
+  /** 是否需要在下一帧把「媒体源」设置区滚到视野中间。 */
+  const [scrollToMedia, setScrollToMedia] = React.useState(false);
+  /** 词库还没导入时，媒体源入口用弹窗而不是跳锚点。 */
+  const [mediaDialogOpen, setMediaDialogOpen] = React.useState(false);
   const [sessionStart, setSessionStart] = React.useState<number>(0);
   const [sessionDone, setSessionDone] = React.useState(0);
   const [sessionCorrect, setSessionCorrect] = React.useState(0);
@@ -136,44 +140,33 @@ export function AtlasPage(): React.ReactElement {
    * 从文本里挑生词组成词集时用不到，保留给「按标签建集」。
    */
 
-  /** 测试当前输入的地址能不能取到媒体。 */
-  async function testMedia(): Promise<void> {
-    setMediaBusy(true);
-    setMediaHint(null);
-    try {
-      if (!isValidMediaBase(mediaBase)) {
-        setMediaHint('地址要以 http:// 或 https:// 开头');
-        return;
-      }
-      const found = await probeMediaBase(mediaBase);
-      setMediaHint(
-        found === null
-          ? '取不到媒体：检查地址、路径，以及服务器是否允许跨域（CORS）'
-          : `连接成功：${found}`,
-      );
-    } finally {
-      setMediaBusy(false);
-    }
+  /**
+   * 跳到统计页的「媒体源」设置区。
+   *
+   * 媒体源以前只藏在统计页最底部，没人找得到。现在从列表头、今日页都有入口，
+   * 点一下直接滚到那块设置并短暂高亮，让用户看见自己跳到了哪里。
+   */
+  function jumpToMediaSource(): void {
+    setView('stats');
+    // 置个标记，等统计页真的渲染出来再滚（滚动本身在下面的 effect 里做）。
+    setScrollToMedia(true);
   }
 
-  /** 保存媒体地址并立即切换。 */
-  async function saveMedia(): Promise<void> {
-    setMediaBusy(true);
-    setMediaHint(null);
-    try {
-      if (!isValidMediaBase(mediaBase)) {
-        setMediaHint('地址要以 http:// 或 https:// 开头');
-        return;
-      }
-      const source = await setMediaBase(mediaBase);
-      wordMedia.clear();
-      setMediaHint(`已切换到「${source.name}」。下一组词会从新地址拉取。`);
-    } catch (e) {
-      setMediaHint((e as Error).message);
-    } finally {
-      setMediaBusy(false);
-    }
-  }
+  /**
+   * 统计页渲染出来后，把「媒体源」那块滚到视野中间。
+   *
+   * 用 effect 而不是 setTimeout：视图切换是 React 状态驱动的，
+   * 只有渲染真正完成，锚点才存在 —— 否则会滚了个寂寞。
+   */
+  React.useEffect(() => {
+    if (!scrollToMedia) return;
+    setScrollToMedia(false);
+    const node = mediaAnchor.current;
+    if (node === null) return;
+    node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    node.classList.add('is-flash');
+    window.setTimeout(() => node.classList.remove('is-flash'), 1200);
+  }, [scrollToMedia, view]);
 
   /**
    * 把「今天待复习 N 个」加成一条倒计时。
@@ -207,10 +200,12 @@ export function AtlasPage(): React.ReactElement {
   React.useEffect(() => {
     void (async () => {
       try {
-        // 读出已保存的媒体地址，填进设置输入框。
-        const savedBase = await getSetting('word.mediaBase').catch(() => null);
-        if (savedBase !== null) setMediaBaseInput(savedBase);
-        void applyMediaSource().catch(() => undefined);
+        void applyMediaSource()
+          .then(() => {
+            // 源确定后刷新状态条（源名 + 缓存条数）。
+            setMediaStatus({ name: wordMedia.sourceName, size: wordMedia.size });
+          })
+          .catch(() => undefined);
         const isLoaded = await WordRepository.isLoaded();
         setLoaded(isLoaded);
         if (!isLoaded) return;
@@ -356,7 +351,16 @@ export function AtlasPage(): React.ReactElement {
   if (!loaded) {
     return (
       <div className="panel wa-page">
-        <div className="list-head"><h3>词光 atlas</h3></div>
+        <div className="list-head">
+          <h3>词光 atlas</h3>
+          {/*
+            词库还没导入时看不到统计页，但媒体源恰恰是用户最先要配的东西
+            （不配就拉不到插画和发音）。所以在这个首屏也留一个入口。
+          */}
+          <button type="button" className="btn wa-mediaentry" onClick={() => setMediaDialogOpen(true)}>
+            🖼 媒体源 · {mediaStatus.name}
+          </button>
+        </div>
         <div className="wa-intro">
           <p className="wa-intro__lead">
             7,298 个雅思核心词，每个词一幅插画、英美发音、原创例句，配 FSRS 复习节奏。
@@ -377,6 +381,15 @@ export function AtlasPage(): React.ReactElement {
           )}
           {error !== null && <div className="banner banner--bad">{error}</div>}
         </div>
+        {/*
+          媒体源对话框：词库还没导入时统计页还不存在，
+          入口不能跳到不存在的锚点，所以这里直接把设置区弹出来。
+        */}
+        <Modal open={mediaDialogOpen} title="媒体源" onClose={() => setMediaDialogOpen(false)} width={520}>
+          <MediaSourceSetting
+            onSaved={() => setMediaStatus({ name: wordMedia.sourceName, size: wordMedia.size })}
+          />
+        </Modal>
       </div>
     );
   }
@@ -390,6 +403,13 @@ export function AtlasPage(): React.ReactElement {
         <span className="list-head__count">
           已学 {summary.learned} / {summary.total} · 掌握 {summary.mastered}
         </span>
+        {/*
+          媒体源入口：以前这块设置只在统计页最底部，用户找不到。
+          现在列表头常驻一个入口（带当前源名），点一下跳到设置区。
+        */}
+        <button type="button" className="btn wa-mediaentry" onClick={jumpToMediaSource}>
+          🖼 媒体源 · {mediaStatus.name}
+        </button>
         <div className="wa-tabs">
           {(['today', 'list', 'stats'] as const).map((item) => (
             <button
@@ -432,6 +452,16 @@ export function AtlasPage(): React.ReactElement {
           )}
           <p className="wa-today__hint">
             只缓存当前这一组（20–30 词）的插画和音频，约 2 MB；换组会自动清掉旧的。
+          </p>
+          {/*
+            媒体源状态行：常驻一句「现在从哪儿取媒体」，并给出配置入口。
+            没有它，用户只会发现图不出不来，却不知道该去哪里改地址。
+          */}
+          <p className="wa-today__hint wa-mediastatus">
+            媒体源：<b>{mediaStatus.name}</b> · 已缓存 {mediaStatus.size} 个媒体文件。
+            <button type="button" className="link wa-mediastatus__link" onClick={jumpToMediaSource}>
+              去配置
+            </button>
           </p>
         </section>
       )}
@@ -558,27 +588,16 @@ export function AtlasPage(): React.ReactElement {
             {reminderAdded && <span className="wa-tag">已加入倒计时</span>}
           </div>
 
-          <h4 className="wa-section-title">媒体源</h4>
-          <p className="wa-today__hint">
-            插画和音频从哪取。留空 = 自动（先试远端，连不上用本地）；填 local 强制本地。
-            当前：<b>{wordMedia.sourceName}</b> · 已缓存 {wordMedia.size} 个媒体文件。
-          </p>
-          <div className="wa-mediabase">
-            <input
-              className="wa-search"
-              placeholder="留空自动 / https://media.example.com / local"
-              value={mediaBase}
-              onChange={(e) => setMediaBaseInput(e.target.value)}
-              aria-label="媒体基地址"
+          {/*
+            媒体源设置：与全局 ⚙ 设置面板共用同一个组件，
+            两边不会各存一份地址，改了一边另一边立刻知道。
+          */}
+          <div ref={mediaAnchor} className="wa-mediaanchor">
+            <h4 className="wa-section-title">媒体源</h4>
+            <MediaSourceSetting
+              onSaved={() => setMediaStatus({ name: wordMedia.sourceName, size: wordMedia.size })}
             />
-            <button type="button" className="btn" disabled={mediaBusy} onClick={() => void testMedia()}>
-              {mediaBusy ? '检测中…' : '测试连接'}
-            </button>
-            <button type="button" className="primary" disabled={mediaBusy} onClick={() => void saveMedia()}>
-              保存
-            </button>
           </div>
-          {mediaHint !== null && <p className="wa-today__hint">{mediaHint}</p>}
         </section>
       )}
     </div>

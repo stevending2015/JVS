@@ -28,9 +28,12 @@
     "verify:remote-media": "node scripts/verify-remote-media.mjs",
     "verify:remote-browser": "node scripts/verify-remote-browser.mjs",
     "verify:print": "node scripts/verify-print.mjs",
+    "verify:print-paging": "node scripts/verify-print-paging.mjs",
     "verify:ui": "node scripts/verify-ui-polish.mjs",
     "verify:settings": "node scripts/verify-settings.mjs",
-    "verify:autolock": "node scripts/verify-autolock.mjs"
+    "verify:autolock": "node scripts/verify-autolock.mjs",
+    "verify:polish": "node scripts/verify-polish.mjs",
+    "verify:countdown-ring": "rolldown src/core/countdown/ring.ts --format cjs --file scripts/.countdown-ring-for-test.cjs && rolldown src/core/countdown/settings.ts --format cjs --file scripts/.countdown-settings-for-test.cjs && node scripts/verify-countdown-ring.mjs"
   },
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "^3.53.4-build2",

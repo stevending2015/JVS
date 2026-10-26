@@ -134,10 +134,11 @@ try {
   await page.locator('.note').first().getByRole('button', { name: '导出 PDF' }).click();
   await page.waitForSelector('.print-overlay', { timeout: 20000 });
   await page.waitForTimeout(800);
-  check('打开打印预览', (await page.locator('.print-sheet').count()) === 1);
+  // 现在是分页预览：至少一页，每页是一个 .print-page（不再是单一 .print-sheet）。
+  check('打开打印预览', (await page.locator('.print-page').count()) >= 1);
 
   const paper = await page.evaluate(() => {
-    const sheet = document.querySelector('.print-sheet');
+    const sheet = document.querySelector('.print-page');
     if (!sheet) return null;
     const style = getComputedStyle(sheet);
     return {
@@ -177,16 +178,21 @@ try {
   const head = exists ? (await import('node:fs')).readFileSync(pdfPath).subarray(0, 5).toString() : '';
   check('是合法 PDF（%PDF- 头）', head === '%PDF-', head);
 
-  // 打印模式下应用其余部分应被隐藏
+  // 打印模式下应用必须彻底离开版面。
+  //
+  // 查 #root（应用根）而不是 .app__bar：display:none 是加在 #root 上的，
+  // 查子元素自己的 display 不会变（它只是被祖先隐藏了），断言会假失败。
+  // 同时查高度为 0 —— 这才真正证明它不再占版面。
   await page.emulateMedia({ media: 'print' });
   await page.waitForTimeout(400);
   const hidden = await page.evaluate(() => {
-    const app = document.querySelector('.app__bar');
-    if (app === null) return 'no-bar';
-    return getComputedStyle(app).visibility;
+    const root = document.querySelector('#root');
+    if (root === null) return { display: 'no-root', height: 0 };
+    const rect = root.getBoundingClientRect();
+    return { display: getComputedStyle(root).display, height: Math.round(rect.height) };
   });
   await page.emulateMedia({ media: 'screen' });
-  check('打印时应用栏被隐藏', hidden === 'hidden', hidden);
+  check('打印时应用离开版面', hidden.display === 'none' && hidden.height === 0, JSON.stringify(hidden));
 
   await page.screenshot({ path: join(out, 'notes-markdown-hierarchy.png'), fullPage: false });
 } finally {
