@@ -164,6 +164,10 @@ Open-Meteo、WMO 码表、主题配色、太阳位置算法一致。为浏览器
 IP 定位（`ip-api.com`）在 HTTPS 页面下不可用（明文 HTTP + 无 CORS 头），改为
 Open-Meteo geocoding 的**城市搜索 + 三个快捷键城市**。
 
+## 更新：
+进入项目目录:
+  1,git branch
+  2,git pull
 ## 隐私与公开版本
 
 生日卡、家族树、笔记、倒计时的用户记录属于敏感数据，保存在浏览器 OPFS SQLite 中，不随源代码发布。不要提交数据库、备份、GEDCOM、个人笔记导出或截图。脚本中的人物为虚构测试样例。应用锁仅限制界面访问，不提供数据库或备份加密。公开版本媒体默认使用本地目录，远端需自行配置。评审结果见 [docs/REVIEW.md](docs/REVIEW.md)。
