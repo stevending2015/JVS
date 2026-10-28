@@ -895,12 +895,33 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 .focus-dial { position: relative; width: 240px; height: 240px; }
-.focus-dial svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-.focus-dial__track { fill: none; stroke: rgba(255, 255, 255, 0.07); stroke-width: 9; }
+/* 整张 svg 不旋转：只有进度圈自己 rotate(-90)，圆环头才能用普通坐标定位。 */
+.focus-dial svg { width: 100%; height: 100%; }
+.focus-dial__track { fill: none; stroke: rgba(255, 255, 255, 0.08); stroke-width: 9; }
 .focus-dial__value {
   fill: none; stroke: var(--accent); stroke-width: 9; stroke-linecap: round;
   transition: stroke-dasharray .3s linear;
 }
+
+/* --- 可拖动：番茄进行中，圆环头能拽 --- */
+.focus-dial--draggable { cursor: grab; touch-action: none; }
+.focus-dial--draggable:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 50%; }
+/* 拖动时不要过渡，否则圈头会「追」手指，拖起来发飘 */
+.focus-dial.is-dragging { cursor: grabbing; }
+.focus-dial.is-dragging .focus-dial__value { transition: none; }
+
+.focus-dial__handle {
+  fill: var(--panel);
+  stroke: var(--accent);
+  stroke-width: 2.6;
+  /* SVG 上的 transform-origin 默认按「整个画布」算，要用 fill-box 才是元素自身中心 */
+  transform-box: fill-box;
+  transform-origin: center;
+  /* 让圈头稍微突出一点，好抓 */
+  filter: drop-shadow(0 0 4px rgba(88, 166, 255, .55));
+  transition: transform .12s ease-out;
+}
+.focus-dial.is-dragging .focus-dial__handle { transform: scale(1.18); transform-origin: center; }
 .focus-dial__label {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 4px;

@@ -126,6 +126,25 @@ async function discardSession(id: string): Promise<void> {
   await db.run('DELETE FROM focus_session WHERE id = ? AND end_time IS NULL', [id]);
 }
 
+/**
+ * 改一个进行中番茄的「计划时长」。
+ *
+ * 用户拖动圆环把剩余时间缩短时走这里。改 planned_seconds 而不是改 start_time：
+ * 计划时长决定这一轮什么时候结束、以及结束时记多少秒；动 start_time 会把
+ * 已经过去的时间凭空算成专注时间。
+ *
+ * 只对**还在进行中**的会话生效（`end_time IS NULL`），已经落库的不该被改。
+ *
+ * @param id - 会话 id。
+ * @param plannedSeconds - 新的计划总时长（秒），至少 1 秒。
+ */
+async function setPlannedSeconds(id: string, plannedSeconds: number): Promise<void> {
+  await db.run(
+    'UPDATE focus_session SET planned_seconds = ? WHERE id = ? AND end_time IS NULL',
+    [Math.max(1, Math.round(plannedSeconds)), id],
+  );
+}
+
 /** Total focused seconds on one local day (YYYY-MM-DD). */
 async function totalSecondsOn(dayKey: string): Promise<number> {
   const rows = await db.all<{ total: number | null }>(
@@ -196,6 +215,7 @@ export const FocusRepository = {
   start: startSession,
   stop: stopSession,
   discard: discardSession,
+  setPlannedSeconds,
   totalSecondsOn,
   dailyTotals,
   sessionsOn,
