@@ -23,6 +23,16 @@
 /** 铃响的两种状态。 */
 export type RingState = 'idle' | 'ringing' | 'blocked';
 
+/**
+ * 默认来源 = 倒计时。
+ *
+ * 这样倒计时模块和它的回归测试一行都不用改；专注那边显式传 `'focus'`。
+ */
+export const DEFAULT_SOURCE = 'countdown';
+
+/** 专注结束提醒用的来源标识。 */
+export const FOCUS_RING_SOURCE = 'focus';
+
 /** 铃响时要显示的内容，以及这次提醒的身份。 */
 export interface RingPayload {
   /** 要显示的标题（倒计时可能是多个标题）。 */
@@ -66,26 +76,37 @@ let context: AudioContext | null = null;
 let master: GainNode | null = null;
 let timer: number | null = null;
 let volume = 0.7;
-let state: RingState = 'idle';
-let payload: RingPayload | null = null;
+/** 音频本身的状态：只要有任意来源要响，它就是 ringing。 */
+let audioState: RingState = 'idle';
 /** 是否已经发生过用户手势 —— 没发生过的话 AudioContext 起不来。 */
 let armed = false;
+
 /**
- * 已经被用户「知道了」确认过的到期集合（按标题排序后拼成的键）。
+ * 每个来源（倒计时 / 专注）各自待提醒的条目。
+ *
+ * 为什么要按来源分开：两处共用同一个铃声，但**提醒是各自的**。以前把标题合并在
+ * 一个 payload 里，结果专注结束的「专注结束」被倒计时模块当成自己的一条到期项
+ * 显示出来（页面上出现「到点了：开会、专注结束」）。分开之后各读各的。
+ */
+const active = new Map<string, RingPayload>();
+/**
+ * 每个来源已经被用户「知道了」确认过的键。
  *
  * 为什么要记在这里而不是组件里：铃声是全局单例，而 React 组件会卸载重挂
  * （比如从倒计时页切回仪表盘再切回来）。如果只存在组件的 ref 里，用户点过
  * 「知道了」之后一离开页面，铃又会重新响起来 —— 确认过的就该保持安静。
+ * 分来源记，才不会「确认了专注」把倒计时的提醒也一并消音。
  */
-let acknowledgedKey = '';
+const acknowledged = new Map<string, string>();
 /**
- * 用户是否允许响铃（总开关）。
+ * 用户是否允许响铃（总开关，属于倒计时页面上的那个开关）。
  *
  * 放在引擎里而不是组件里，是因为仪表盘卡片和倒计时页都会触发起铃 —— 只有一
  * 个地方知道「用户把声音关了」，才不会出现「页面上一看是关的、卡片上却在响」。
  */
 let enabled = true;
-const listeners = new Set<Listener>();
+/** 订阅者连同它关心的来源一起记，publish 时只回各自的条目。 */
+const listeners = new Map<Listener, string>();
 
 /** 懒创建 AudioContext（必须在用户手势里或之后）。 */
 function audio(): AudioContext | null {
@@ -104,9 +125,25 @@ function audio(): AudioContext | null {
   }
 }
 
-/** 通知所有订阅者状态变了。 */
+/**
+ * 某个来源此刻该看到的状态。
+ *
+ * 有条目 + 音频在响 = ringing；有条目但音频没起来 = blocked（被自动播放策略挡了）；
+ * 没有条目 = idle（哪怕别的来源正在响，这个来源也不该显示「正在响」）。
+ *
+ * @param source - 来源标识。
+ * @returns 该来源的状态。
+ */
+function stateFor(source: string): RingState {
+  if (!active.has(source)) return 'idle';
+  return audioState;
+}
+
+/** 通知所有订阅者：每个人只拿到自己关心的那个来源。 */
 function publish(): void {
-  for (const listener of listeners) listener(state, payload);
+  for (const [listener, source] of listeners) {
+    listener(stateFor(source), active.get(source) ?? null);
+  }
 }
 
 /**
@@ -160,7 +197,7 @@ function scheduleCycle(ctx: AudioContext): void {
   burst(ctx, now + BURST + GAP);
   const next = now + BURST * 2 + GAP + CYCLE_GAP;
   timer = window.setTimeout(() => {
-    if (state !== 'ringing' || context === null) return;
+    if (audioState !== 'ringing' || context === null) return;
     scheduleCycle(context);
   }, Math.max(120, (next - ctx.currentTime) * 1000));
 }
@@ -233,27 +270,35 @@ export async function startRing(
   force = false,
   keyHint?: string,
   bypassMute = false,
+  source = DEFAULT_SOURCE,
 ): Promise<boolean> {
-  const merged = new Set<string>(payload?.titles ?? []);
+  const previous = active.get(source);
+  const merged = new Set<string>(previous?.titles ?? []);
   for (const title of next) merged.add(title);
   const key = keyHint ?? derivedKey([...merged]);
-  if (!force && acknowledgedKey !== '' && key === acknowledgedKey) {
+  const acked = acknowledged.get(source);
+  if (!force && acked !== undefined && acked === key) {
     // 用户已经确认过了，保持安静。
-    return state === 'ringing';
+    return stateFor(source) === 'ringing';
   }
+
+  const payload: RingPayload = { titles: [...merged], key };
+
   if (!enabled && !bypassMute) {
-    // 用户把声音关了：记下到期清单（界面上要显示「到点了」）但不出声。
-    payload = { titles: [...merged], key };
+    // 用户把声音关了：记下要显示的清单（界面上要显示「到点了」）但不出声。
+    active.set(source, payload);
     publish();
     return false;
   }
-  payload = { titles: [...merged], key };
-  if (state === 'ringing') {
+
+  active.set(source, payload);
+  if (audioState === 'ringing') {
+    // 已经在响（可能是另一个来源在响）：共用同一个铃声，不重新起一遍。
     publish();
     return true;
   }
   const ok = await begin();
-  state = ok ? 'ringing' : 'blocked';
+  audioState = ok ? 'ringing' : 'blocked';
   publish();
   return ok;
 }
@@ -269,7 +314,7 @@ export function setRingEnabled(on: boolean): void {
   enabled = on;
   if (!enabled) {
     end();
-    state = 'idle';
+    audioState = 'idle';
     publish();
   }
 }
@@ -280,10 +325,17 @@ export function setRingEnabled(on: boolean): void {
  * 同时记下这次的到期集合，之后不再自动响 —— 用户确认过就是确认过，翻页面、
  * 刷新都不该又响起来。
  */
-export function stopRing(): void {
-  if (payload !== null) acknowledgedKey = payload.key;
-  end();
-  state = 'idle';
+export function stopRing(source = DEFAULT_SOURCE): void {
+  const current = active.get(source);
+  if (current !== undefined) {
+    acknowledged.set(source, current.key);
+    active.delete(source);
+  }
+  // 还有别的来源要响就继续响 —— 停专注不该顺带把倒计时的铃也停掉。
+  if (active.size === 0) {
+    end();
+    audioState = 'idle';
+  }
   publish();
 }
 
@@ -301,11 +353,11 @@ export function armRing(): () => void {
     armed = true;
     removeEventListener('pointerdown', arm);
     removeEventListener('keydown', arm);
-    if (state === 'blocked') {
+    if (audioState === 'blocked') {
       // 状态是 blocked 说明用户还没确认过（确认过就不会再进来），
       // 现在有了手势，直接把铃补上。
       void begin().then((ok) => {
-        state = ok ? 'ringing' : 'blocked';
+        audioState = ok ? 'ringing' : 'blocked';
         publish();
       });
     }
@@ -323,8 +375,8 @@ export function armRing(): () => void {
  *
  * @returns 状态与到期清单。
  */
-export function ringStatus(): { state: RingState; payload: RingPayload | null } {
-  return { state, payload };
+export function ringStatus(source = DEFAULT_SOURCE): { state: RingState; payload: RingPayload | null } {
+  return { state: stateFor(source), payload: active.get(source) ?? null };
 }
 
 /**
@@ -336,10 +388,15 @@ export function ringStatus(): { state: RingState; payload: RingPayload | null } 
  * @param titles - 要检查的到期标题。
  * @returns 是否已确认。
  */
-export function isRingAcknowledged(titles: string[], key?: string): boolean {
+export function isRingAcknowledged(
+  titles: string[],
+  key?: string,
+  source = DEFAULT_SOURCE,
+): boolean {
+  const acked = acknowledged.get(source);
   const wanted = key ?? (titles.length > 0 ? derivedKey(titles) : '');
-  if (acknowledgedKey === '' || wanted === '') return false;
-  return wanted === acknowledgedKey;
+  if (acked === undefined || wanted === '') return false;
+  return wanted === acked;
 }
 
 /**
@@ -348,8 +405,8 @@ export function isRingAcknowledged(titles: string[], key?: string): boolean {
  * @param listener - 状态变化时调用，回调参数是（状态, 到期清单）。
  * @returns 退订函数。
  */
-export function subscribeRing(listener: Listener): () => void {
-  listeners.add(listener);
+export function subscribeRing(listener: Listener, source = DEFAULT_SOURCE): () => void {
+  listeners.set(listener, source);
   return () => {
     listeners.delete(listener);
   };
@@ -363,7 +420,7 @@ export function subscribeRing(listener: Listener): () => void {
 export function setRingVolume(next: number): void {
   volume = Math.max(0, Math.min(1, next));
   const ctx = context;
-  if (ctx !== null && master !== null && state === 'ringing') {
+  if (ctx !== null && master !== null && audioState === 'ringing') {
     master.gain.cancelScheduledValues(ctx.currentTime);
     master.gain.setValueAtTime(Math.max(0.0001, master.gain.value), ctx.currentTime);
     master.gain.linearRampToValueAtTime(Math.max(0.0001, volume), ctx.currentTime + 0.15);
@@ -379,11 +436,16 @@ export function setRingVolume(next: number): void {
  * @param key - 可选的身份键（专注每结束一次都要新的，见 RingPayload.key）。
  * @returns 是否成功。
  */
-export async function ringNow(next: string[], key?: string, bypassMute = false): Promise<boolean> {
+export async function ringNow(
+  next: string[],
+  key?: string,
+  bypassMute = false,
+  source = DEFAULT_SOURCE,
+): Promise<boolean> {
   armed = true;
   // 用户是主动点的「开启提醒 / 开始响铃」，所以强制响 —— 即便之前确认过。
   // 但总开关仍然尊重：用户把声音整个关了，就不该因为点一下又响起来。
-  return startRing(next, true, key, bypassMute);
+  return startRing(next, true, key, bypassMute, source);
 }
 
 /** 页面是否已经发生过用户手势。 */

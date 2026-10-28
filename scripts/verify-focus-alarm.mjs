@@ -169,6 +169,65 @@ try {
   check('重新打开声音后又会响铃', back.includes('正在持续响铃'), back.replace(/\n/g, ' '));
 
   await page.screenshot({ path: join(out, 'focus-alarm-muted.png'), fullPage: false });
+
+  console.log('8. 专注提醒不能串到「倒计时」模块里去');
+  // 曾经的现象：两个提醒共用一个 payload，专注结束的「专注结束」被倒计时模块
+  // 当成自己的一条到期项，页面上出现「到点了：开会、专注结束」。
+  await page.locator('.focus-alarm button', { hasText: '知道了' }).first().click();
+  await page.waitForTimeout(500);
+  await skewTo(0);
+
+  // 造一条「就是今天」的倒计时，让倒计时模块自己也有待办
+  await page.goto(`${BASE}/#/m/countdown`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.panel', { timeout: 20000 });
+  await page.waitForTimeout(600);
+  await page.locator('.btn--add').click();
+  await page.waitForSelector('.modal', { timeout: 10000 });
+  const now = new Date();
+  const pad = (v) => String(v).padStart(2, '0');
+  await page.locator('.modal input[name="title"]').fill('开会');
+  await page.locator('.modal input[name="date"]').fill(`${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`);
+  await page.locator('.modal button[type="submit"]').click();
+  await page.waitForTimeout(1200);
+
+  // 开一个番茄，然后停在倒计时页等它结束
+  await page.goto(`${BASE}/#/m/focus`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.focus-clock', { timeout: 20000 });
+  await page.waitForTimeout(600);
+  await page.locator('.focus-actions .primary').click();
+  await page.waitForTimeout(1000);
+  await page.goto(`${BASE}/#/m/countdown`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.panel', { timeout: 20000 });
+  await page.waitForTimeout(700);
+  await skewTo(26);
+  await page.waitForSelector('.focus-alarm', { timeout: 15000 });
+  await page.waitForTimeout(900);
+
+  const countdownText = await page.locator('.panel').first().innerText();
+  console.log('  倒计时模块 =', countdownText.replace(/\n/g, ' | ').slice(0, 220));
+  check('倒计时模块仍然列出自己的到期项', countdownText.includes('开会'), countdownText.replace(/\n/g, ' ').slice(0, 160));
+  check('倒计时的到期清单里没有混入「专注结束」', !countdownText.includes('专注结束'), countdownText.replace(/\n/g, ' ').slice(0, 160));
+
+  // 专注提醒本身仍然在（只是显示在自己的浮层里）
+  const globalAlarm = await page.locator('.focus-alarm').innerText();
+  check('专注结束的提醒仍然出现（在自己的浮层里）', globalAlarm.includes('专注结束'), globalAlarm.replace(/\n/g, ' '));
+
+  console.log('9. 专注卡片上也要显示这条提醒');
+  await page.goto(`${BASE}/#/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.card-grid', { timeout: 20000 });
+  await page.waitForTimeout(900);
+  const focusCard = await page.locator('.card', { hasText: '专注' }).innerText();
+  console.log('  专注卡片 =', focusCard.replace(/\n/g, ' | ').slice(0, 200));
+  check('仪表盘的专注卡片显示「专注结束」', focusCard.includes('专注结束'), focusCard.replace(/\n/g, ' '));
+  check('专注卡片显示这一轮的时长', /\d+\s*分钟/.test(focusCard), focusCard.replace(/\n/g, ' '));
+
+  await page.screenshot({ path: join(out, 'focus-alarm-card.png'), fullPage: false });
+
+  // 确认之后卡片要恢复成「今日累计」
+  await page.locator('.focus-alarm button', { hasText: '知道了' }).first().click();
+  await page.waitForTimeout(800);
+  const cardAfter = await page.locator('.card', { hasText: '专注' }).innerText();
+  check('确认后专注卡片恢复正常显示', !cardAfter.includes('专注结束'), cardAfter.replace(/\n/g, ' '));
 } finally {
   await context.close();
 }

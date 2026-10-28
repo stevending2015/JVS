@@ -1717,3 +1717,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .focus-alarm__sub { font-size: 12px; line-height: 1.5; color: var(--muted); }
 .focus-alarm__actions { display: flex; align-items: center; gap: 8px; flex: none; }
 .focus-alarm__actions button { padding: 6px 14px; font-size: 12.5px; }
+
+/* 专注卡片上的「刚结束」提醒：比普通读数更醒目，但不用告警色（那是倒计时的）。 */
+.mini-big.focus-card--alarm { color: var(--accent); font-size: 19px; letter-spacing: .02em; }

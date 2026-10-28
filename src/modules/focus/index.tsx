@@ -21,6 +21,10 @@ import {
   plannedSeconds,
   recentDayKeys,
 } from '../../core/focus/util.js';
+import {
+  focusAlarmState,
+  subscribeFocusAlarm,
+} from '../../core/focus/alarm.js';
 import { useStore } from '../../core/store.js';
 
 type Mode = 'pomodoro' | 'stopwatch';
@@ -39,12 +43,29 @@ export function FocusCard(): React.ReactElement {
   const running = focusSession !== null;
   /** 每秒重算一次，让卡片上的读数和专注页同步走动。 */
   const [, setTick] = React.useState(0);
+  /** 刚结束、还没确认的那一轮 —— 提醒也要出现在这张卡片上。 */
+  const [alarm, setAlarm] = React.useState(focusAlarmState());
+
+  React.useEffect(() => subscribeFocusAlarm(setAlarm), []);
 
   React.useEffect(() => {
     if (focusSession === null) return undefined;
     const timer = window.setInterval(() => setTick((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
   }, [focusSession]);
+
+  // 结束提醒优先于「今日累计」显示：这时候用户最需要知道的是「刚才那一轮结束了」，
+  // 点卡片进专注页就能看到详情并停铃。
+  if (alarm !== null && !running) {
+    return (
+      <div>
+        <div className="mini-big focus-card--alarm">专注结束</div>
+        <div className="mini-list__meta">
+          ⏱ 完成 {alarm.minutes} 分钟 · 点卡片查看
+        </div>
+      </div>
+    );
+  }
 
   let display: string;
   let hint: React.ReactNode;
@@ -158,8 +179,17 @@ export function FocusPage(): React.ReactElement {
     isPomodoro ? Math.max(remaining, arcTotal - elapsed) : remaining,
   );
   const shownRemaining = dragRemaining ?? remaining;
-  /** 剩余比例：1 = 满圈（刚开始），0 = 走完了。 */
-  const arcFraction = arcTotal > 0 ? Math.max(0, Math.min(1, shownRemaining / arcTotal)) : 0;
+  /**
+   * 剩余比例：1 = 满圈（刚开始），0 = 走完了。
+   *
+   * **没在计时的时候也显示满圈**：选好「25 分钟」时，圆环应该是完整的一圈蓝，
+   * 表示「这一轮有 25 分钟等着被用掉」；番茄结束、会话复位之后同样回到满圈。
+   * 原来空闲时按 0 画，看上去像「已经走完了」，和用户的直觉相反。
+   * 正计时没有长度，所以那种模式下不画。
+   */
+  const arcFraction = focusSession === null
+    ? (mode === 'stopwatch' ? 0 : 1)
+    : (arcTotal > 0 ? Math.max(0, Math.min(1, shownRemaining / arcTotal)) : 0);
 
   /** 圆环头的坐标（svg 坐标系，12 点方向为起点，顺时针）。 */
   const handleAngle = -Math.PI / 2 + Math.PI * 2 * arcFraction;

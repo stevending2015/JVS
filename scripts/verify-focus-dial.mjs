@@ -93,6 +93,13 @@ try {
   await page.waitForFunction(() => document.body.innerText.includes('已就绪'), undefined, { timeout: 60000 });
   await page.waitForSelector('.focus-clock', { timeout: 30000 });
   await page.waitForTimeout(800);
+
+  // 还没开始（只是选中「25 分钟」）也应该是完整一圈蓝，表示这一轮的额度。
+  const idle = await readDial();
+  console.log('  空闲 =', JSON.stringify(idle));
+  check('未开始时也画满圈（不是空圈）', Math.abs(idle.dash - CIRCUMFERENCE) <= 3, String(idle.dash));
+  check('未开始时没有拖拽圆点（不能拖）', !idle.hasHandle);
+
   await page.locator('.focus-actions .primary').click();
   await page.waitForTimeout(900);
 
@@ -141,6 +148,14 @@ try {
   check('按缩短后的时间提前结束了', alarm.includes('专注结束'), alarm.replace(/\n/g, ' '));
   await page.locator('.focus-alarm button').last().click();
   await page.waitForTimeout(500);
+
+  console.log('5.5 番茄结束、会话复位后，圆环要恢复满圈');
+  await page.goto(`${BASE}/#/m/focus`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.focus-clock', { timeout: 20000 });
+  await page.waitForTimeout(900);
+  const reset = await readDial();
+  console.log('  复位后 =', JSON.stringify(reset));
+  check('复位后圆环恢复满圈', Math.abs(reset.dash - CIRCUMFERENCE) <= 3, String(reset.dash));
 
   console.log('6. 能把圆环头拖回去（上限是原计划）');
   await skewTo(0);

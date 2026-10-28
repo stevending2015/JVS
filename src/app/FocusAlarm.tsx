@@ -26,29 +26,32 @@ import {
   subscribeRing,
   type RingState,
 } from '../core/audio/ring.js';
+import { FOCUS_RING_SOURCE } from '../core/audio/ring.js';
+import {
+  clearFocusAlarm,
+  focusAlarmState,
+  setFocusAlarm,
+  subscribeFocusAlarm,
+  type FocusAlarmState,
+} from '../core/focus/alarm.js';
 import { FocusRepository } from '../core/focus/repository.js';
 import { useStore } from '../core/store.js';
 
 /** 提醒卡片上显示的标题。 */
 const ALARM_TITLE = '专注结束';
 
-/** 一轮已经结束、等待用户确认的番茄。 */
-interface FinishedAlarm {
-  /** 会话 id，同时作为这次提醒的唯一 key。 */
-  id: string;
-  /** 计划时长（分钟）。 */
-  minutes: number;
-}
-
 export function FocusAlarm(): React.ReactElement | null {
   const { focusSession, focusSoundOn, refreshFocus } = useStore();
-  const [state, setState] = React.useState<RingState>(ringStatus().state);
+  const [state, setState] = React.useState<RingState>(ringStatus(FOCUS_RING_SOURCE).state);
   /** 刚结束、还没被用户关掉的那一轮；null 表示没有要显示的东西。 */
-  const [finished, setFinished] = React.useState<FinishedAlarm | null>(null);
+  const [finished, setFinished] = React.useState<FocusAlarmState | null>(focusAlarmState());
   /** 已经处理（落库 + 起铃）过的 session id，防止同一个番茄重复处理。 */
   const handledRef = React.useRef<string | null>(null);
 
-  React.useEffect(() => subscribeRing((next) => setState(next)), []);
+  // 只订阅「专注」这个来源：倒计时的到期不该让专注卡片显示成在响，反之亦然。
+  React.useEffect(() => subscribeRing((next) => setState(next), FOCUS_RING_SOURCE), []);
+  // 提醒本体用共享状态，仪表盘上的专注卡片读的是同一份。
+  React.useEffect(() => subscribeFocusAlarm(setFinished), []);
 
   /**
    * 声音开关的最新值。
@@ -71,7 +74,7 @@ export function FocusAlarm(): React.ReactElement | null {
   /** 新的番茄一开始，就把上一轮的提示收掉。 */
   React.useEffect(() => {
     if (focusSession === null) return;
-    if (finished !== null && focusSession.id !== finished.id) setFinished(null);
+    if (finished !== null && focusSession.id !== finished.sessionId) clearFocusAlarm();
   }, [focusSession, finished]);
 
   /**
@@ -143,12 +146,12 @@ export function FocusAlarm(): React.ReactElement | null {
     handledRef.current = session.id;
 
     const minutes = Math.max(1, Math.round(session.planned_seconds / 60));
-    setFinished({ id: session.id, minutes });
+    setFocusAlarm({ sessionId: session.id, minutes });
 
     // 读 ref 而不是 props：定时器里的闭包可能是几分钟前的，用户中途改了开关。
     if (soundOnRef.current) {
       // bypassMute：引擎的总开关属于倒计时，专注不跟着它一起哑。
-      await startRing([ALARM_TITLE], false, `focus:${session.id}`, true);
+      await startRing([ALARM_TITLE], false, `focus:${session.id}`, true, FOCUS_RING_SOURCE);
     }
 
     try {
@@ -161,14 +164,14 @@ export function FocusAlarm(): React.ReactElement | null {
 
   /** 用户点「知道了」：停铃并收掉卡片。 */
   const acknowledge = React.useCallback(() => {
-    stopRing();
-    setFinished(null);
+    stopRing(FOCUS_RING_SOURCE);
+    clearFocusAlarm();
   }, []);
 
   /** 被自动播放策略挡住时，用户点一下才出声 —— 这一下本身就是用户手势。 */
   const enable = React.useCallback(() => {
     const key = `focus:${handledRef.current ?? 'manual'}`;
-    void ringNow([ALARM_TITLE], key, true);
+    void ringNow([ALARM_TITLE], key, true, FOCUS_RING_SOURCE);
   }, []);
 
   if (finished === null) return null;
